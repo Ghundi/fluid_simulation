@@ -5,9 +5,10 @@ This must match the C++ simulation parameters.
 
 # The C++ code stores the *padded* grid (width+2)*(height+2)*(depth+2)
 # per time step, so we include the padding here as well.
-width  = 128 + 2          # X-size (including the two walls)
-height = 64 + 2           # Y-size (including the two walls)
-depth  = 64 + 2           # Z-size (including the two walls)
+scale = 1
+width  = (128 * scale) + 2          # X-size (including the two walls)
+height = (64 * scale) + 2           # Y-size (including the two walls)
+depth  = (64 * scale) + 2           # Z-size (including the two walls)
 
 # Custom colour map for density (white → green → blue → red)
 from matplotlib.colors import LinearSegmentedColormap

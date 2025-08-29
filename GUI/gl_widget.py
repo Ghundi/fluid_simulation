@@ -195,7 +195,7 @@ class OpenGL3DView(QOpenGLWidget):
         gl.glPolygonOffset(1.0, 1.0)
 
         # Draw solid faces
-        gl.glColor4f(0.5, 0.5, 0.5, 1.0)
+        gl.glColor4f(0.7, 0.7, 0.7, 1.0)
         gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)
         self._draw_obstacle_triangles()
 
@@ -250,30 +250,30 @@ class OpenGL3DView(QOpenGLWidget):
 
         
     def draw_streamlines(self):
-        """Draw streamlines using a simple line strip."""
+        """Draw streamlines with point limit to avoid freeze."""
         if not self.streamlines:
             return
 
-        # This is the bug fix: Apply the same transformation used by the obstacles
-        # so the streamlines are drawn in the correct coordinate space.
-        self._push_domain()
+        # 🔒 Safety: Limit total points
+        MAX_TOTAL_POINTS = 100_000
+        total_points = sum(len(sl) for sl in self.streamlines)
+        if total_points > MAX_TOTAL_POINTS:
+            print(f"Too many points ({total_points}), skipping streamlines.")
+            return
 
+        self._push_domain()
         gl.glLineWidth(1.5)
         for idx, streamline in enumerate(self.streamlines):
-            # Set the color for this specific streamline
             r, g, b, a = self.streamline_colors[idx]
             gl.glColor4f(r, g, b, a)
-
-            # Draw the line
             gl.glBegin(gl.GL_LINE_STRIP)
             for pt in streamline:
-                # pt is a numpy array [x, y, z]
-                gl.glVertex3fv(pt)
+                # Skip NaN/Inf
+                if np.any(np.isnan(pt)) or np.any(np.isinf(pt)):
+                    continue
+                gl.glVertex3fv(pt.astype(np.float32))
             gl.glEnd()
-        
-        # Pop the transformation matrix to not affect subsequent drawing
         self._pop_domain()
-
 
     def _create_streamline_vbo(self):
         """Create VBO for streamline rendering."""

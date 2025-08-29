@@ -86,27 +86,32 @@ def _integrate_streamline_part(start_pos, vx, vy, vz, obs_data, max_steps, direc
     streamline_velocities = [_interpolate_vector(vx, vy, vz, *start_pos)]
     
     pos = start_pos.copy()
-
     for _ in range(max_steps):
         vec = _interpolate_vector(vx, vy, vz, pos[0], pos[1], pos[2])
         speed = np.linalg.norm(vec)
+        if speed < 1e-6:
+            break
 
-        if speed < 1e-6: break
-        
-        # Move one step
-        pos += direction * (vec / speed) * config.INTEGRATION_STEP_SIZE
+        # Compute step
+        step = direction * (vec / speed) * config.INTEGRATION_STEP_SIZE
+        pos = pos + step  # Avoid in-place modification
 
-        # Check for boundaries or obstacles
+        # 🔴 CHECK FOR NaN
+        if np.any(np.isnan(pos)) or np.any(np.isinf(pos)):
+            break
+
+        # Check boundaries
         if not (1 <= pos[0] < config.width - 1 and
                 1 <= pos[1] < config.height - 1 and
                 1 <= pos[2] < config.depth - 1):
             break
+
+        # Check obstacle
         if _interpolate_scalar(obs_data, pos[0], pos[1], pos[2]) > 0.5:
             break
 
         streamline_points.append(pos.copy())
         streamline_velocities.append(vec)
-
     return streamline_points, streamline_velocities
 
 

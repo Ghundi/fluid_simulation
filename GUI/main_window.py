@@ -38,22 +38,11 @@ class Fluid3DViewer(QtWidgets.QMainWindow):
         ctrl_panel.setMaximumWidth(300)
         ctrl_layout = QtWidgets.QVBoxLayout(ctrl_panel)
         
-        # Time slider
-        time_group = QtWidgets.QGroupBox("Time Control")
+        # Time info (only last frame loaded)
+        time_group = QtWidgets.QGroupBox("Frame")
         time_layout = QtWidgets.QVBoxLayout()
-        
-        self.time_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.time_slider.setMinimum(0)
-        self.time_slider.setMaximum(self.n_frames - 1)
-        self.time_slider.setValue(0)
-        self.time_slider.setTickPosition(
-            QtWidgets.QSlider.TickPosition.TicksBelow
-        )
-        self.time_slider.setTickInterval(max(1, self.n_frames // 10))
-        self.time_slider.valueChanged.connect(self.update_visualization)
-        
-        time_layout.addWidget(QtWidgets.QLabel("Frame:"))
-        time_layout.addWidget(self.time_slider)
+        time_layout.addWidget(QtWidgets.QLabel("Status: Final state only"))
+        time_layout.addWidget(QtWidgets.QLabel(f"Size: {config.width}×{config.height}×{config.depth}"))
         time_group.setLayout(time_layout)
         ctrl_layout.addWidget(time_group)
         
@@ -159,34 +148,40 @@ class Fluid3DViewer(QtWidgets.QMainWindow):
     # ------------------------------------------------------------------
     def load_data(self):
         """
-        Read the five *.bin files into arrays of shape
-        (n_frames, depth, height, width).  All files contain ``float32`` data.
+        Read the five *.bin files and keep only the LAST FRAME.
+        Resulting arrays have shape (depth, height, width) — no time dimension.
         """
-        def read_bin(name):
+        def read_last_frame(name):
             path = os.path.join("data", name)
             if not os.path.exists(path):
                 raise FileNotFoundError(f"Data file not found: {path}")
-                
-            with open(path, "rb") as f:
-                arr = np.fromfile(f, dtype=np.float32)
             
-            # Sanity check – total number of floats must be a multiple of a frame
             frame_elems = config.width * config.height * config.depth
-            if arr.size % frame_elems != 0:
-                raise ValueError(f"Bad size in {name}: {arr.size} elements, expected multiple of {frame_elems}")
+            bytes_per_frame = frame_elems * 4  # float32 = 4 bytes
+
+            with open(path, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                file_size = f.tell()
+                n_frames = file_size // bytes_per_frame
+                if file_size % bytes_per_frame != 0:
+                    raise ValueError(f"Invalid file size in {name}: {file_size} bytes")
+
+                f.seek(-bytes_per_frame, os.SEEK_END)
+                data = np.fromfile(f, dtype=np.float32, count=frame_elems)
             
-            # reshape to (time, z, y, x)
-            return arr.reshape(-1, config.depth, config.height, config.width)
+            return data.reshape(config.depth, config.height, config.width)
         
-        # Load the five fields
-        self.density = read_bin("data.bin")
-        self.vx = read_bin("v_x.bin")
-        self.vy = read_bin("v_y.bin")
-        self.vz = read_bin("v_z.bin")
-        self.obs = read_bin("obs.bin")
+        # Load only the last frame
+        self.density = read_last_frame("data.bin")
+        self.vx = read_last_frame("v_x.bin")
+        self.vy = read_last_frame("v_y.bin")
+        self.vz = read_last_frame("v_z.bin")
+        self.obs = read_last_frame("obs.bin")
         
-        self.n_frames = self.density.shape[0]
-        print(f"Loaded data with {self.n_frames} frames of size {config.width}x{config.height}x{config.depth}")
+        self.n_frames = 1
+        print(f"Loaded ONLY THE LAST FRAME of size {config.width}x{config.height}x{config.depth}")
+
+        
     # ------------------------------------------------------------------
     # Streamline parameter updates
     # ------------------------------------------------------------------
@@ -204,72 +199,45 @@ class Fluid3DViewer(QtWidgets.QMainWindow):
     def update_visualization(self):
         """Update all visualization elements based on current settings."""
         start_time = time.time()
-        
-        frame_idx = self.time_slider.value()
-        
-        # Get obstacle data for current frame
-        obs_data = self.obs[frame_idx, :, :, :]  # (z, y, x)
-        
-        # Reshape to (x, y, z) for visualization
-        obs_data = np.transpose(obs_data, (2, 1, 0))  # (x, y, z)
-        
+
+        # Get obstacle data (only frame)
+        obs_data = np.transpose(self.obs, (2, 1, 0))  # → (x, y, z)
+
         # Generate mesh
         mesh_data = utils.generate_obstacle_mesh(obs_data)
-        
+
         # Prepare obstacle data for OpenGL
         obstacle_verts = []
         obstacle_faces = []
-        
-        # Set obstacle data
+
         if self.obstacle_checkbox.isChecked():
             if mesh_data['vertexes'].size > 0:
-                # Convert to format OpenGL can use
-                for i in range(len(mesh_data['vertexes'])):
-                    x, y, z = mesh_data['vertexes'][i]
-                    # Shift by -1 to align with CFD data origin
-                    obstacle_verts.append([x-1, y-1, z-1])
-                
+                for x, y, z in mesh_data['vertexes']:
+                    obstacle_verts.append([x - 1, y - 1, z - 1])  # Shift origin
                 for face in mesh_data['faces']:
-                    obstacle_faces.append([face[0], face[1], face[2]])
-            
+                    obstacle_faces.append(face[:3])  # Assume triangular faces
+
         self.view.set_obstacle_data(obstacle_verts, obstacle_faces)
-        
-        # Get streamline data
+
+        # Streamlines
         streamlines = []
         streamline_colors = []
-        
+
         if self.streamline_checkbox.isChecked():
-            # Get velocity and obstacle data
-            vx_data = self.vx[frame_idx, :, :, :]  # (z, y, x)
-            vy_data = self.vy[frame_idx, :, :, :]  # (z, y, x)
-            vz_data = self.vz[frame_idx, :, :, :]  # (z, y, x)
-            obs_data = self.obs[frame_idx, :, :, :]  # (z, y, x)
-            density_data = self.density[frame_idx, :, :, :] if True else None
-            
-            # Reshape to (x, y, z) for streamline generation
-            vx = np.transpose(vx_data, (2, 1, 0))  # (x, y, z)
-            vy = np.transpose(vy_data, (2, 1, 0))  # (x, y, z)
-            vz = np.transpose(vz_data, (2, 1, 0))  # (x, y, z)
-            obs = np.transpose(obs_data, (2, 1, 0))  # (x, y, z)
-            density = np.transpose(density_data, (2, 1, 0)) if density_data is not None else None
-            
-            # Generate streamlines (only where velocity changes)
+            vx = np.transpose(self.vx, (2, 1, 0))
+            vy = np.transpose(self.vy, (2, 1, 0))
+            vz = np.transpose(self.vz, (2, 1, 0))
+            obs = np.transpose(self.obs, (2, 1, 0))
+            density = np.transpose(self.density, (2, 1, 0)) if self.density is not None else None
+
             streamlines, streamline_colors = utils.generate_streamlines(vx=vx, vy=vy, vz=vz, obs_data=obs)
-            
-            # Shift all points by -1 to align with CFD data origin
+
+            # Shift streamline points
             for i in range(len(streamlines)):
                 streamlines[i] = streamlines[i] - 1
-        
-        # Set streamline data
+
         self.view.set_streamline_data(streamlines, streamline_colors)
-        
-        # Update status
-        # self.update_status()
-        
+
         # Update render time
         render_time = (time.time() - start_time) * 1000
         self.render_time_label.setText(f"Render time: {render_time:.1f} ms")
-    
-    # ------------------------------------------------------------------
-    # UI helpers
-    # ----------------------------------------------------------------
