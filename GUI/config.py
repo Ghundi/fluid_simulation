@@ -17,8 +17,8 @@ density_cmap = LinearSegmentedColormap.from_list(
 )
 
 # Streamline parameters
-STREAMLINE_DENSITY = 15   # Number of seed points per dimension
-STREAMLINE_PROXIMITY = 5 # Proximity to obstacle for streamlines to be visible
+STREAMLINE_DENSITY = 30   # Number of seed points per dimension
+STREAMLINE_PROXIMITY = 2 # Proximity to obstacle for streamlines to be visible
 INTEGRATION_STEPS = 100    # Steps to integrate each streamline
 INTEGRATION_STEP_SIZE = 0.2  # Step size for integration
 VELOCITY_CHANGE_THRESHOLD = 0.1  # Only show streamlines where velocity changes significantly

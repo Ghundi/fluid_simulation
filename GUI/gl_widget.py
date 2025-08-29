@@ -182,33 +182,48 @@ class OpenGL3DView(QOpenGLWidget):
         gl.glEnd()
     
     def draw_obstacles(self):
-        """Draw obstacles using indexed triangles."""
+        """Draw obstacles with solid fill + wireframe overlay."""
         if not self.obstacle_verts or not self.obstacle_faces:
             return
-
         if self.obstacle_vbo is None or self.obstacle_ibo is None:
             self._create_obstacle_vbo()
 
         self._push_domain()
 
+        # Enable polygon offset to avoid z-fighting
         gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
         gl.glPolygonOffset(1.0, 1.0)
-        gl.glColor4f(0.5, 0.5, 0.5, 1.0)
 
+        # Draw solid faces
+        gl.glColor4f(0.5, 0.5, 0.5, 1.0)
+        gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)
+        self._draw_obstacle_triangles()
+
+        # Draw wireframe edges
+        gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
+        gl.glEnable(gl.GL_POLYGON_OFFSET_LINE)
+        gl.glPolygonOffset(1.1, 1.1)
+        gl.glColor4f(0.0, 0.0, 0.0, 1.0)  # Black edges
+        gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)
+        gl.glLineWidth(1.5)
+        self._draw_obstacle_triangles()
+
+        # Reset
+        gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)
+        gl.glDisable(gl.GL_POLYGON_OFFSET_LINE)
+
+        self._pop_domain()
+
+    def _draw_obstacle_triangles(self):
+        """Helper to draw obstacle triangles (used for both fill and wireframe)."""
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.obstacle_vbo)
         gl.glVertexPointer(3, gl.GL_FLOAT, 0, None)
         gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
-
         gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self.obstacle_ibo)
         gl.glDrawElements(gl.GL_TRIANGLES, self.obstacle_index_count, gl.GL_UNSIGNED_INT, None)
-
         gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, 0)
         gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0)
-
-        gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
-
-        self._pop_domain()
 
 
     def _create_obstacle_vbo(self):

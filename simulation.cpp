@@ -431,18 +431,18 @@ int main()
     int width  = 128;
     int height = 64;
     int depth  = 64;
-    int iter   = 1;
+    int iter   = 100;
     int speed  = 30;
 
     Simulation sim(width, height, depth, iter, speed);
 
     // Load obstacle from STL
-    loadSTLIntoObstacles("/media/raoul/Speed/Data/3D-Printing/Models/Cars/F1Car-basic.stl", sim, 
+    loadSTLIntoObstacles("/media/raoul/Speed/Data/3D-Printing/Models/Bike/CyclingMount.stl", sim, 
                      2.0f,     // scale
                      90.0f,     // rot_x
-                     0.0f,    // rot_y
-                     0.0f,     // rot_z
-                     0.0f, 0.0f, 0.0f); // translate
+                     175.0f,    // rot_y
+                     270.0f,     // rot_z
+                     0.0f, -16.0f, 0.0f); // translate
 
     sim.run();
 
