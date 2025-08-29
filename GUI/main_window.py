@@ -89,7 +89,7 @@ class Fluid3DViewer(QtWidgets.QMainWindow):
         streamline_density_layout.addWidget(QtWidgets.QLabel("Streamline Density:"))
         self.streamline_density_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.streamline_density_slider.setMinimum(5)
-        self.streamline_density_slider.setMaximum(30)
+        self.streamline_density_slider.setMaximum(50)
         self.streamline_density_slider.setValue(config.STREAMLINE_DENSITY)
         self.streamline_density_slider.valueChanged.connect(self.update_streamline_params)
         streamline_density_layout.addWidget(self.streamline_density_slider)

@@ -1,4 +1,7 @@
 /.venv
 /.vscode
-*.bin\
+*.bin
 *.out
+*.o
+*.bin
+GUI/__pycache__
